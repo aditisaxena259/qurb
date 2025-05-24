@@ -2,21 +2,21 @@ import React, { useEffect, useMemo, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 
 interface Product {
-  id: string;
-  name: string;
-  price: string;
-  img: string;
-  available: number;
-  quantity: number;
-  description: string;
-  type: string;
-}
+    id: string;
+    name: string;
+    price: string;
+    img: string;
+    available: number;
+    quantity: number;
+    description: string;
+    type: string;
+    isFreebie?: boolean;
+  }
+  
 
 export default function CheckoutPage() {
   const location = useLocation();
   const navigate = useNavigate();
-
-  // Initialize cart with cleaned price strings
   const [cart, setCart] = useState<Product[]>(() => {
     const incomingCart = location.state?.cart;
     let initialCart = Array.isArray(incomingCart)
@@ -28,16 +28,16 @@ export default function CheckoutPage() {
     return initialCart.map((item) => ({
       ...item,
       price: typeof item.price === "string" ? item.price.replace(/[^\d.]/g, "") : item.price,
-      quantity: item.quantity || 1, // ensure quantity is at least 1
+      quantity: item.quantity || 1,
     }));
   });
+  
 
   const [products, setProducts] = useState<Product[]>([]);
   const [filtered, setFiltered] = useState<Product[]>([]);
   const [liked, setLiked] = useState<Set<string>>(new Set());
   const [category, setCategory] = useState("all");
   const [searchQuery, setSearchQuery] = useState("");
-
   // Fetch products from API
   useEffect(() => {
     fetch("https://uxdlyqjm9i.execute-api.eu-west-1.amazonaws.com/s?category=all")
@@ -61,16 +61,6 @@ export default function CheckoutPage() {
     }
   }, []);
 
-  // Filter products by category and search query
-  useEffect(() => {
-    const lowerSearch = searchQuery.toLowerCase();
-    const filteredItems = products.filter((item) => {
-      const matchesCategory = category === "all" || item.type === category;
-      const matchesSearch = item.name.toLowerCase().includes(lowerSearch);
-      return matchesCategory && matchesSearch;
-    });
-    setFiltered(filteredItems);
-  }, [products, category, searchQuery]);
 
   const updateQuantity = (id: string, delta: number, maxQty: number) => {
     setCart((prev) => {
@@ -102,18 +92,82 @@ export default function CheckoutPage() {
   const final = useMemo(() => subtotal - discount, [subtotal, discount]);
 
   const goBack = () => {
-    navigate("/");
+    
+    localStorage.setItem("cartItems", JSON.stringify(cart));
+    navigate(-1); 
   };
 
-  // **Make Checkout button functional:**
+ 
   const handleCheckout = () => {
-    // You can replace this with actual checkout logic
     alert(`Checked out! Total: €${final.toFixed(2)}`);
-    setCart([]); // empty cart after checkout
-
-    // Navigate to confirmation or home page after checkout
+    setCart([]); 
     navigate("/", { replace: true });
   };
+  const applyOffers = (cart: Product[], products: Product[]): Product[] => {
+    const updatedCart = [...cart];
+    const coke = updatedCart.find((item) =>
+      item.name.toLowerCase().includes("coca-cola")
+    );
+  
+    if (coke && coke.quantity >= 6) {
+      const existingFreeCoke = updatedCart.find(
+        (item) => item.name.toLowerCase() === "coca-cola (free)"
+      );
+      if (!existingFreeCoke) {
+        updatedCart.push({
+          ...coke,
+          id: `${coke.id}-free`,
+          name: "Coca-Cola (Free)",
+          quantity: 1,
+          price: "0.00",
+          isFreebie: true,
+        });
+      }
+    }
+  
+    const croissant = updatedCart.find((item) =>
+        item.name.toLowerCase().includes("croissant")
+      );
+    
+      if (croissant && croissant.quantity >= 3) {
+        const existingFreeCoffee = updatedCart.find(
+          (item) => item.name.toLowerCase() === "coffee (free)"
+        );
+    
+        if (!existingFreeCoffee) {
+          const originalCoffee = products.find((p) =>
+            p.name.toLowerCase().includes("coffee")
+          );
+    
+          updatedCart.push({
+            id: `${originalCoffee?.id || "coffee-free"}`,
+            name: "Coffee (Free)",
+            quantity: 1,
+            price: "0.00",
+            img: originalCoffee?.img || "", 
+            available: originalCoffee?.available || 0,
+            description: originalCoffee?.description || "Free coffee with croissant offer",
+            type: originalCoffee?.type || "beverage",
+            isFreebie: true,
+        });
+      }
+    }
+  
+    return updatedCart;
+  };
+  
+  useEffect(() => {
+    setCart((prevCart) =>
+      applyOffers(prevCart.filter((p) => !p.isFreebie), products)
+    );
+  }, [products, cart]);
+  useEffect(() => {
+  const filteredItems = products.filter((p) =>
+    p.name.toLowerCase().includes(searchQuery.toLowerCase())
+  );
+  setFiltered(filteredItems);
+}, [searchQuery, products]);
+    
 
   return (
     <div className="lg:p-20 sm:p-10">
@@ -151,7 +205,7 @@ export default function CheckoutPage() {
             />
             {cart.length > 0 && (
               <span className="absolute -top-5 -right-5 bg-blue-500 text-white text-xs font-bold rounded-full px-2 py-0.5">
-                {cart.length}
+                {cart.reduce((acc, item) => acc + item.quantity, 0)}
               </span>
             )}
           </div>
@@ -163,62 +217,83 @@ export default function CheckoutPage() {
       {cart.length === 0 ? (
         <p className="text-gray-600">No items in cart.</p>
       ) : (
+        
         <>
+        
           <div className="grid grid-cols-1 gap-6 mb-8 pr-0 sm:pr-52">
-            {cart.map((item) => (
-              <div
-                key={item.id}
-                className="flex flex-col sm:flex-row border-gray-500 p-4 rounded-2xl shadow-xl gap-4 items-start"
-              >
-                <img
-                  src={item.img}
-                  className="w-full sm:w-24 h-48 sm:h-24 object-cover rounded-lg"
-                  alt={item.name}
-                />
-                <div className="flex flex-col w-full">
-                  <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center flex-wrap w-full">
-                    <div className="flex flex-col w-full sm:w-[40%] min-w-[180px] mb-4 sm:mb-0">
-                      <h2 className="text-xl font-bold text-black">{item.name}</h2>
-                      <p className="text-sm mt-4 text-gray-500">Product Code: {item.id}</p>
-                    </div>
+            
+                {cart.filter((item) =>
+    item.name.toLowerCase().includes(searchQuery.toLowerCase())
+  ).map((item) => (
+                    <div
+                    key={item.id}
+                    className={`flex flex-col sm:flex-row border-gray-500 p-4 rounded-2xl shadow-xl gap-4 items-start ${
+                        item.isFreebie ? "bg-green-50 border-dashed border-2 border-green-300" : ""
+                    }`}
+                    >
+                    <img
+                        src={item.img}
+                        className="w-full sm:w-24 h-48 sm:h-24 object-cover rounded-lg"
+                        alt={item.name}
+                    />
+                    <div className="flex flex-col w-full">
+                        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center flex-wrap w-full">
+                        <div className="flex flex-col w-full sm:w-[40%] min-w-[180px] mb-4 sm:mb-0">
+                            <h2 className="text-xl font-bold text-black">
+                            {item.name}{" "}
+                            {item.isFreebie && (
+                                <span className="text-sm text-green-600 font-semibold">(Free Item)</span>
+                            )}
+                            </h2>
+                            <p className="text-sm mt-4 text-gray-500">Product Code: {item.id}</p>
+                        </div>
 
-                    <div className="flex flex-row sm:flex-col items-center sm:items-center min-w-[160px] gap-4 mb-4 sm:mb-0">
-                      <div className="flex items-center gap-2">
-                        <button
-                          className="px-3 py-1 border bg-red-500 text-white rounded-xl hover:bg-red-600"
-                          onClick={() => updateQuantity(item.id, -1, item.available)}
-                        >
-                          −
-                        </button>
-                        <span className="px-2 text-black text-lg">{item.quantity}</span>
-                        <button
-                          className="px-3 py-1 border bg-green-500 text-white rounded-xl hover:bg-green-600"
-                          onClick={() => updateQuantity(item.id, 1, item.available)}
-                        >
-                          +
-                        </button>
-                      </div>
-                      {item.available < 10 && (
-                        <p className="text-sm px-6 py-1 mt-2 text-white bg-orange-400 rounded-xl font-medium">
-                          Only {item.available} left!
-                        </p>
-                      )}
-                    </div>
+                        <div className="flex flex-row sm:flex-col items-center sm:items-center min-w-[160px] gap-4 mb-4 sm:mb-0">
+                            {!item.isFreebie ? (
+                            <div className="flex items-center gap-2">
+                                <button
+                                className="px-3 py-1 border bg-red-500 text-white rounded-xl hover:bg-red-600"
+                                onClick={() => updateQuantity(item.id, -1, item.available)}
+                                >
+                                −
+                                </button>
+                                <span className="px-2 text-black text-lg">{item.quantity}</span>
+                                <button
+                                className="px-3 py-1 border bg-green-500 text-white rounded-xl hover:bg-green-600"
+                                onClick={() => updateQuantity(item.id, 1, item.available)}
+                                >
+                                +
+                                </button>
+                            </div>
+                            ) : (
+                            <p className="text-black text-md">Qty: {item.quantity}</p>
+                            )}
 
-                    <div className="flex items-center gap-4 min-w-[120px] justify-end">
-                      <p className="text-lg text-gray-500 whitespace-nowrap pr-12">€{item.price}</p>
-                      <button
-                        className="text-white bg-green-500 rounded-xl px-3 py-1 hover:bg-green-800"
-                        onClick={() => removeFromCart(item.id)}
-                        title="Remove"
-                      >
-                        ✕
-                      </button>
+                            {!item.isFreebie && item.available < 10 && (
+                            <p className="text-sm px-6 py-1 mt-2 text-white bg-orange-400 rounded-xl font-medium">
+                                Only {item.available} left!
+                            </p>
+                            )}
+                        </div>
+
+                        <div className="flex items-center gap-4 min-w-[120px] justify-end">
+                            <p className="text-lg text-gray-500 whitespace-nowrap pr-12">
+                            €{parseFloat(item.price).toFixed(2)}
+                            </p>
+                            {!item.isFreebie && (
+                            <button
+                                className="text-white bg-green-500 rounded-xl px-3 py-1 hover:bg-green-800"
+                                onClick={() => removeFromCart(item.id)}
+                                title="Remove"
+                            >
+                                ✕
+                            </button>
+                            )}
+                        </div>
+                        </div>
                     </div>
-                  </div>
-                </div>
-              </div>
-            ))}
+                    </div>
+                ))}
 
             <div className="w-full flex justify-center mt-10">
               <div className="w-full max-w-full text-black grid grid-cols-3 gap-0 text-lg font-semibold border-t border-gray-300">
@@ -249,7 +324,7 @@ export default function CheckoutPage() {
                 </div>
                 <div className="col-span-1 flex justify-end items-center border-b border-gray-300 py-4 pr-2">
                   <button
-                    onClick={handleCheckout} // <-- wired up here
+                    onClick={handleCheckout} 
                     className="px-4 py-2 bg-[#7FD287] text-white rounded-xl text-sm hover:bg-green-700"
                   >
                     Checkout

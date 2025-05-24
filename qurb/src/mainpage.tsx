@@ -16,10 +16,18 @@ export default function Main() {
   const [products, setProducts] = useState<Product[]>([]);
   const [filtered, setFiltered] = useState<Product[]>([]);
   const [liked, setLiked] = useState<Set<string>>(new Set());
-  const [cart, setCart] = useState<Product[]>([]);
+  const [cart, setCart] = useState<Product[]>(() => {
+    const stored = localStorage.getItem("cartItems");
+    return stored ? JSON.parse(stored) : [];
+  });
   const [category, setCategory] = useState("all");
   const [searchQuery, setSearchQuery] = useState("");
   const navigate = useNavigate();
+
+  // Persist cart in localStorage whenever it changes
+  useEffect(() => {
+    localStorage.setItem("cartItems", JSON.stringify(cart));
+  }, [cart]);
 
   // Load products on mount
   useEffect(() => {
@@ -52,7 +60,6 @@ export default function Main() {
     setCart((prev) => {
       const existingIndex = prev.findIndex((p) => p.id === item.id);
       if (existingIndex !== -1) {
-        // If already in cart, increase quantity only if less than available
         const existingItem = prev[existingIndex];
         if (existingItem.quantity < item.available) {
           const newCart = [...prev];
@@ -62,25 +69,23 @@ export default function Main() {
           };
           return newCart;
         } else {
-          // Quantity at max available, don't increase
           return prev;
         }
       }
-      // Not in cart, add with quantity 1 only if available > 0
       if (item.available > 0) {
         return [...prev, { ...item, quantity: 1 }];
       }
       return prev;
     });
   };
+
   useEffect(() => {
     const stored = localStorage.getItem("likedItems");
     if (stored) {
       setLiked(new Set(JSON.parse(stored)));
     }
   }, []);
-  
-  // When toggling like, save to localStorage
+
   const handleToggleLike = (id: string) => {
     setLiked((prev) => {
       const newSet = new Set(prev);
@@ -94,20 +99,6 @@ export default function Main() {
     });
   };
 
-  // Toggle liked items using Set for efficiency
-//   const handleToggleLike = (id: string) => {
-//     setLiked((prev) => {
-//       const newLiked = new Set(prev);
-//       if (newLiked.has(id)) {
-//         newLiked.delete(id);
-//       } else {
-//         newLiked.add(id);
-//       }
-//       return newLiked;
-//     });
-//   };
-
-  // Navigate to checkout page with cart data
   const goToCheckout = () => {
     if (cart.length === 0) {
       alert("Your cart is empty!");
